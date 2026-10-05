@@ -117,8 +117,8 @@ class RegisteredPage(ctk.CTkFrame):
             top = ctk.CTkFrame(item, fg_color="transparent")
             top.grid(row=0, column=0, sticky="ew", padx=14, pady=(10, 2))
             ctk.CTkLabel(top, text=task.title, font=f.body_bold, text_color=theme.TEXT).pack(side="left")
-            DeleteButton(top, f, lambda t=task: self._delete_task(t), question="このタスクを削除しますか？").pack(side="right")
-            ghost_button(top, "編集", lambda t=task: self.app.open_edit_task(t.id), f).pack(side="right", padx=(0, 6))
+            # 誤操作を防ぐため、削除は編集画面からのみ行う
+            ghost_button(top, "編集", lambda t=task: self.app.open_edit_task(t.id), f).pack(side="right")
 
             info = ctk.CTkFrame(item, fg_color="transparent")
             info.grid(row=1, column=0, sticky="w", padx=14, pady=(2, 10))
@@ -135,10 +135,6 @@ class RegisteredPage(ctk.CTkFrame):
                 ctk.CTkLabel(info, text=f"🔗 {len(task.links)}件", font=f.small, text_color=theme.SUB).pack(
                     side="left", padx=(10, 0)
                 )
-
-    def _delete_task(self, task: Task):
-        self.app.delete_task(task.id)
-        self.refresh()
 
     # ---- 今日のメモ ----
 

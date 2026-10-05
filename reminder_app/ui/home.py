@@ -12,7 +12,6 @@ from ..models import END_DATE, Task, format_date_jp, format_date_short
 from . import theme
 from .widgets import (
     CalendarPopup,
-    DeleteButton,
     badge,
     bind_wraplength,
     card,
@@ -208,8 +207,8 @@ class HomePage(ctk.CTkFrame):
             fg_color=theme.SUCCESS, hover_color="#2f8f5b", checkbox_width=24, checkbox_height=24,
             command=lambda: self._on_check(task, bool(var.get())),
         ).pack(side="left")
-        DeleteButton(top, f, lambda: self._delete(task), question="このタスクを削除しますか？").pack(side="right")
-        ghost_button(top, "編集", lambda: self.app.open_edit_task(task.id), f).pack(side="right", padx=(0, 6))
+        # 誤操作を防ぐため、削除は編集画面からのみ行う
+        ghost_button(top, "編集", lambda: self.app.open_edit_task(task.id), f).pack(side="right")
 
         # バッジ（継続タスク・期日・表示終了日）
         badges = ctk.CTkFrame(row, fg_color="transparent")
@@ -242,8 +241,4 @@ class HomePage(ctk.CTkFrame):
         self.app.store.set_task_done(task.id, self.current, done)
         if done:
             self.app.set_status(f"「{task.title}」を完了にしました。おつかれさまです！")
-        self._render_tasks()
-
-    def _delete(self, task: Task):
-        self.app.delete_task(task.id)
         self._render_tasks()
