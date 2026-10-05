@@ -3,188 +3,181 @@
 from __future__ import annotations
 
 from datetime import date
-from tkinter import ttk
 from typing import TYPE_CHECKING
 
+import customtkinter as ctk
+
 from ..models import END_DATE, END_DUE, Task, format_date_jp, format_date_short
-from .widgets import ConfirmBar
+from . import theme
+from .widgets import DateField, DeleteButton, badge, bind_wraplength, card, ghost_button, primary_button, scroll_frame
 
 if TYPE_CHECKING:
     from .app import App
 
+VIEW_TASKS = "タスク"
+VIEW_MEMOS = "今日のメモ"
 
-def _period_text(task: Task) -> str:
+
+def period_text(task: Task) -> str:
     start = format_date_short(task.start_date)
-    if task.end_mode == END_DUE:
-        return f"{start} 〜 期日まで"
+    if task.end_mode == END_DUE and task.due_date:
+        return f"{start} 〜 {format_date_short(task.due_date)}（期日まで）"
     if task.end_mode == END_DATE and task.display_until:
         return f"{start} 〜 {format_date_short(task.display_until)}"
     return f"{start} 〜 " + ("ずっと" if task.keep_after_done else "完了まで")
 
 
-def _status_text(task: Task, today: date) -> str:
+def status_of(task: Task, today: date) -> tuple[str, tuple[str, str]]:
+    """状態の表示名とバッジの色。"""
     last = task.last_visible_date()
     if task.keep_after_done:
         if last is not None and today > last:
-            return "表示終了"
-        return "今日完了" if task.is_done_on(today) else "表示中"
+            return "表示終了", theme.BADGE_INFO
+        if today < task.start_date:
+            return "表示前", theme.BADGE_INFO
+        return ("今日は完了", theme.BADGE_DONE) if task.is_done_on(today) else ("表示中", theme.BADGE_DAILY)
     done = task.completed_on()
     if done is not None:
-        return f"完了（{format_date_short(done)}）"
+        return f"完了（{format_date_short(done)}）", theme.BADGE_DONE
     if last is not None and today > last:
-        return "表示終了（未完了）"
+        return "表示終了（未完了）", theme.BADGE_INFO
     if task.is_overdue_on(today):
-        return "期限切れ"
+        return "期限切れ", theme.BADGE_OVERDUE
     if today < task.start_date:
-        return "表示前"
-    return "未完了"
+        return "表示前", theme.BADGE_INFO
+    return "未完了", theme.BADGE_DAILY
 
 
-class RegisteredTab(ttk.Frame):
+class RegisteredPage(ctk.CTkFrame):
     def __init__(self, master, app: App):
-        super().__init__(master, padding=10)
+        super().__init__(master, fg_color=theme.BG)
         self.app = app
-        inner = ttk.Notebook(self)
-        inner.pack(fill="both", expand=True)
-        inner.add(self._build_task_page(inner), text="タスク")
-        inner.add(self._build_memo_page(inner), text="今日のメモ")
+        self.fonts = f = app.fonts
+
+        box = card(self)
+        box.pack(fill="both", expand=True, pady=(4, 4))
+        head = ctk.CTkFrame(box, fg_color="transparent")
+        head.pack(fill="x", padx=20, pady=(14, 4))
+        ctk.CTkLabel(head, text="📋 登録済み一覧", font=f.heading, text_color=theme.TEXT).pack(side="left")
+        self.view_button = ctk.CTkSegmentedButton(
+            head, values=[VIEW_TASKS, VIEW_MEMOS], command=lambda v: self.refresh(), font=f.body_bold,
+            selected_color=theme.PRIMARY, selected_hover_color=theme.PRIMARY_HOVER,
+            unselected_color=theme.GHOST, unselected_hover_color=theme.GHOST_HOVER, text_color=theme.TEXT,
+            fg_color=theme.GHOST, corner_radius=14, height=32,
+        )
+        self.view_button.set(VIEW_TASKS)
+        self.view_button.pack(side="left", padx=(16, 0))
+
+        # 操作バー（表示内容で切り替える）
+        self.task_bar = ctk.CTkFrame(box, fg_color="transparent")
+        primary_button(self.task_bar, "＋ 新規登録", lambda: self.app.open_new_task(), f, width=120).pack(side="left")
+
+        self.memo_bar = ctk.CTkFrame(box, fg_color="transparent")
+        ctk.CTkLabel(self.memo_bar, text="別の日のメモを書く：", font=f.body, text_color=theme.TEXT).pack(side="left")
+        self.memo_date_field = DateField(self.memo_bar, f)
+        self.memo_date_field.pack(side="left", padx=(4, 8))
+        primary_button(self.memo_bar, "この日のメモを開く", self._open_memo_from_field, f, width=150).pack(side="left")
+        self.bar_slot = ctk.CTkFrame(box, fg_color="transparent", height=0)
+        self.bar_slot.pack(fill="x", padx=20)
+
+        self.list = scroll_frame(box)
+        self.list.pack(fill="both", expand=True, padx=8, pady=(6, 10))
+        self.list.grid_columnconfigure(0, weight=1)
+
+    def refresh(self):
+        for child in self.list.winfo_children():
+            child.destroy()
+        self.task_bar.pack_forget()
+        self.memo_bar.pack_forget()
+        if self.view_button.get() == VIEW_TASKS:
+            self.task_bar.pack(fill="x", padx=20, pady=(6, 0), before=self.bar_slot)
+            self._render_tasks()
+        else:
+            self.memo_date_field.set(date.today())
+            self.memo_bar.pack(fill="x", padx=20, pady=(6, 0), before=self.bar_slot)
+            self._render_memos()
+
+    def _empty(self, text: str):
+        ctk.CTkLabel(self.list, text=text, font=self.fonts.body, text_color=theme.SUB).grid(row=0, column=0, pady=30)
 
     # ---- タスク ----
 
-    def _build_task_page(self, master) -> ttk.Frame:
-        page = ttk.Frame(master, padding=8)
-        bar = ttk.Frame(page)
-        bar.pack(fill="x")
-        ttk.Button(bar, text="＋ 新規登録", style="Accent.TButton", command=lambda: self.app.open_new_task()).pack(
-            side="left"
-        )
-        ttk.Button(bar, text="編集", command=self._edit_selected).pack(side="left", padx=(8, 0))
-        ttk.Button(bar, text="削除", command=self._delete_selected_task).pack(side="left", padx=(8, 0))
-
-        self.task_confirm = ConfirmBar(page)
-        self.task_confirm.place_with(fill="x", pady=(8, 0), after=bar)
-
-        columns = ("title", "kind", "due", "period", "status", "links")
-        self.task_tree = ttk.Treeview(page, columns=columns, show="headings", selectmode="browse")
-        for col, text, width, stretch in [
-            ("title", "タイトル", 260, True),
-            ("kind", "種類", 80, False),
-            ("due", "期日", 100, False),
-            ("period", "表示する期間", 170, False),
-            ("status", "状態", 130, False),
-            ("links", "リンク", 60, False),
-        ]:
-            self.task_tree.heading(col, text=text)
-            self.task_tree.column(col, width=width, stretch=stretch, anchor="w")
-        scroll = ttk.Scrollbar(page, orient="vertical", command=self.task_tree.yview)
-        self.task_tree.configure(yscrollcommand=scroll.set)
-        self.task_tree.pack(side="left", fill="both", expand=True, pady=(8, 0))
-        scroll.pack(side="right", fill="y", pady=(8, 0))
-        self.task_tree.bind("<Double-1>", lambda e: self._edit_selected())
-        return page
-
-    def _selected_task(self) -> Task | None:
-        selection = self.task_tree.selection()
-        if not selection:
-            self.app.set_status("タスクを選択してください。", error=True)
-            return None
-        return self.app.store.get_task(selection[0])
-
-    def _edit_selected(self):
-        task = self._selected_task()
-        if task is not None:
-            self.app.open_edit_task(task.id)
-
-    def _delete_selected_task(self):
-        task = self._selected_task()
-        if task is None:
+    def _render_tasks(self):
+        f = self.fonts
+        today = date.today()
+        tasks = sorted(self.app.store.tasks, key=lambda t: (t.start_date, t.created_at), reverse=True)
+        if not tasks:
+            self._empty("登録済みのタスクはありません。")
             return
+        for i, task in enumerate(tasks):
+            item = card(self.list)
+            item.grid(row=i, column=0, sticky="ew", padx=8, pady=4)
+            item.grid_columnconfigure(0, weight=1)
 
-        def delete():
-            self.app.store.delete_task(task.id)
-            self.app.on_task_deleted(task.id)
-            self.app.set_status(f"「{task.title}」を削除しました。")
-            self.refresh()
+            top = ctk.CTkFrame(item, fg_color="transparent")
+            top.grid(row=0, column=0, sticky="ew", padx=14, pady=(10, 2))
+            ctk.CTkLabel(top, text=task.title, font=f.body_bold, text_color=theme.TEXT).pack(side="left")
+            DeleteButton(top, f, lambda t=task: self._delete_task(t), question="このタスクを削除しますか？").pack(side="right")
+            ghost_button(top, "編集", lambda t=task: self.app.open_edit_task(t.id), f).pack(side="right", padx=(0, 6))
 
-        self.task_confirm.show(f"「{task.title}」を削除しますか？（完了の記録も消えます）", delete)
+            info = ctk.CTkFrame(item, fg_color="transparent")
+            info.grid(row=1, column=0, sticky="w", padx=14, pady=(2, 10))
+            status, colors = status_of(task, today)
+            badge(info, status, colors, f).pack(side="left", padx=(0, 6))
+            if task.keep_after_done:
+                badge(info, "🔁 毎日表示", theme.BADGE_DAILY, f).pack(side="left", padx=(0, 6))
+            if task.due_date:
+                badge(info, f"⏰ 期日 {format_date_short(task.due_date)}", theme.BADGE_INFO, f).pack(side="left", padx=(0, 6))
+            ctk.CTkLabel(info, text=f"表示期間：{period_text(task)}", font=f.small, text_color=theme.SUB).pack(
+                side="left", padx=(4, 0)
+            )
+            if task.links:
+                ctk.CTkLabel(info, text=f"🔗 {len(task.links)}件", font=f.small, text_color=theme.SUB).pack(
+                    side="left", padx=(10, 0)
+                )
+
+    def _delete_task(self, task: Task):
+        self.app.delete_task(task.id)
+        self.refresh()
 
     # ---- 今日のメモ ----
 
-    def _build_memo_page(self, master) -> ttk.Frame:
-        page = ttk.Frame(master, padding=8)
-        bar = ttk.Frame(page)
-        bar.pack(fill="x")
-        ttk.Button(bar, text="この日のホームを開く", command=self._open_selected_memo).pack(side="left")
-        ttk.Button(bar, text="削除", command=self._delete_selected_memo).pack(side="left", padx=(8, 0))
-
-        self.memo_confirm = ConfirmBar(page)
-        self.memo_confirm.place_with(fill="x", pady=(8, 0), after=bar)
-
-        self.memo_tree = ttk.Treeview(page, columns=("date", "text"), show="headings", selectmode="browse")
-        self.memo_tree.heading("date", text="日付")
-        self.memo_tree.heading("text", text="内容")
-        self.memo_tree.column("date", width=180, stretch=False)
-        self.memo_tree.column("text", width=500, stretch=True)
-        scroll = ttk.Scrollbar(page, orient="vertical", command=self.memo_tree.yview)
-        self.memo_tree.configure(yscrollcommand=scroll.set)
-        self.memo_tree.pack(side="left", fill="both", expand=True, pady=(8, 0))
-        scroll.pack(side="right", fill="y", pady=(8, 0))
-        self.memo_tree.bind("<Double-1>", lambda e: self._open_selected_memo())
-        return page
-
-    def _selected_memo_date(self) -> date | None:
-        selection = self.memo_tree.selection()
-        if not selection:
-            self.app.set_status("メモを選択してください。", error=True)
-            return None
-        return date.fromisoformat(selection[0])
-
-    def _open_selected_memo(self):
-        d = self._selected_memo_date()
-        if d is not None:
-            self.app.show_home(d)
-
-    def _delete_selected_memo(self):
-        d = self._selected_memo_date()
-        if d is None:
+    def _render_memos(self):
+        f = self.fonts
+        dates = self.app.store.memo_dates()
+        if not dates:
+            self._empty("保存されたメモはありません。")
             return
+        for i, d in enumerate(dates):
+            item = card(self.list)
+            item.grid(row=i, column=0, sticky="ew", padx=8, pady=4)
+            item.grid_columnconfigure(0, weight=1)
 
-        def delete():
-            self.app.store.delete_memo(d)
-            if self.app.home.current == d:
-                self.app.home.refresh()
-            self.app.set_status(f"{format_date_jp(d)} のメモを削除しました。")
-            self.refresh()
+            top = ctk.CTkFrame(item, fg_color="transparent")
+            top.grid(row=0, column=0, sticky="ew", padx=14, pady=(10, 2))
+            ctk.CTkLabel(top, text="📝 " + format_date_jp(d), font=f.body_bold, text_color=theme.TEXT).pack(side="left")
+            DeleteButton(top, f, lambda d=d: self._delete_memo(d), question="このメモを削除しますか？").pack(side="right")
+            ghost_button(top, "開く", lambda d=d: self.app.show_home(d, focus_memo=True), f).pack(side="right", padx=(0, 6))
 
-        self.memo_confirm.show(f"{format_date_jp(d)} のメモを削除しますか？", delete)
+            lines = self.app.store.get_memo(d).strip().splitlines()
+            preview = "\n".join(lines[:3]) + ("\n…" if len(lines) > 3 else "")
+            text = ctk.CTkLabel(item, text=preview, font=f.body, text_color="#5d6778", justify="left", anchor="w")
+            text.grid(row=1, column=0, sticky="ew", padx=(36, 14), pady=(0, 10))
+            bind_wraplength(text)
 
-    # ---- 再表示 ----
+    def _open_memo_from_field(self):
+        try:
+            d = self.memo_date_field.get()
+        except ValueError:
+            d = None
+        if d is None:
+            self.app.set_status("日付は 2026-10-05 のように入力するか、📅 から選んでください。", error=True)
+            return
+        self.app.show_home(d, focus_memo=True)
 
-    def refresh(self):
-        today = date.today()
-        self.task_confirm.hide()
-        self.memo_confirm.hide()
-
-        self.task_tree.delete(*self.task_tree.get_children())
-        tasks = sorted(self.app.store.tasks, key=lambda t: (t.start_date, t.created_at), reverse=True)
-        for task in tasks:
-            self.task_tree.insert(
-                "",
-                "end",
-                iid=task.id,
-                values=(
-                    task.title,
-                    "毎日表示" if task.keep_after_done else "通常",
-                    format_date_short(task.due_date) if task.due_date else "なし",
-                    _period_text(task),
-                    _status_text(task, today),
-                    f"{len(task.links)}件" if task.links else "",
-                ),
-            )
-
-        self.memo_tree.delete(*self.memo_tree.get_children())
-        for d in self.app.store.memo_dates():
-            text = self.app.store.get_memo(d)
-            first_line = text.strip().splitlines()[0] if text.strip() else ""
-            preview = first_line + (" …" if len(text.strip().splitlines()) > 1 else "")
-            self.memo_tree.insert("", "end", iid=d.isoformat(), values=(format_date_jp(d), preview))
+    def _delete_memo(self, d: date):
+        self.app.store.delete_memo(d)
+        if self.app.home.current == d:
+            self.app.home.refresh()
+        self.app.set_status(f"{format_date_jp(d)} のメモを削除しました。")
+        self.refresh()

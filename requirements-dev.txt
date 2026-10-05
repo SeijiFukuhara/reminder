@@ -1,2 +1,3 @@
-# exe の作成に使う（アプリ本体は標準ライブラリのみで動く）
+# exe の作成に使う
+-r requirements.txt
 pyinstaller==6.22.3

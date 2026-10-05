@@ -11,7 +11,7 @@ if not exist ".venv\Scripts\python.exe" (
 ".venv\Scripts\python.exe" -m pip install --upgrade pip --quiet || goto :error
 ".venv\Scripts\python.exe" -m pip install -r requirements-dev.txt --quiet || goto :error
 
-".venv\Scripts\python.exe" -m PyInstaller --noconfirm --clean --onefile --windowed --name Reminder main.py || goto :error
+".venv\Scripts\python.exe" -m PyInstaller --noconfirm --clean --onefile --windowed --name Reminder --collect-data customtkinter main.py || goto :error
 
 echo.
 echo Done: %~dp0dist\Reminder.exe

@@ -33,7 +33,7 @@ build.bat
 `build.bat` は次のことを自動で行います。
 
 1. 仮想環境 `.venv` がなければ作成する
-2. `.venv` に PyInstaller（`requirements-dev.txt`）をインストールする
+2. `.venv` に customtkinter と PyInstaller（`requirements-dev.txt`）をインストールする
 3. `dist\Reminder.exe` を作成する
 
 ## 新しいバージョンを公開する
@@ -51,11 +51,17 @@ git push origin v1.0.1
 
 ### Python から直接起動する
 
+画面には [customtkinter](https://github.com/TomSchimansky/CustomTkinter) を使っています。
+仮想環境に入れてから起動してください。
+
 ```
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
 python main.py
 ```
 
-アプリ本体は標準ライブラリ（tkinter）だけで動くので、追加のインストールは不要です。
+2回目以降は `.venv\Scripts\activate` → `python main.py` だけで起動できます。
 
 ### テスト
 
@@ -68,17 +74,19 @@ python -m unittest discover -s tests -t .
 ```
 main.py                 起動スクリプト
 build.bat               仮想環境の作成と exe のビルド
-requirements-dev.txt    ビルドに使うパッケージ（PyInstaller）
+requirements.txt        アプリに必要なパッケージ（customtkinter）
+requirements-dev.txt    ビルドに使うパッケージ（+ PyInstaller）
 reminder_app/
   models.py             タスクのデータと表示ルール
   storage.py            JSONファイルへの保存・読み込み
   ui/
     app.py              メインウインドウ（タブ）
+    theme.py            色・フォント
     home.py             ホーム（タスク一覧・今日のメモ）
     task_form.py        タスク登録・編集
     completed.py        完了済みタスク（日ごと）
     registered.py       登録済みタスク・メモ一覧
-    widgets.py          共通部品
+    widgets.py          共通部品（カレンダー、削除ボタンなど）
 tests/                  テスト
 .github/workflows/      exe を自動で作成・公開する設定
 ```

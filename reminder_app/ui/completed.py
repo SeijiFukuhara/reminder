@@ -2,54 +2,69 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-from tkinter import ttk
+from datetime import date, datetime
 from typing import TYPE_CHECKING
 
+import customtkinter as ctk
+
 from ..models import format_date_jp
-from .widgets import SUB_COLOR, ScrollableFrame
+from . import theme
+from .widgets import badge, card, ghost_button, scroll_frame
 
 if TYPE_CHECKING:
     from .app import App
 
 
-class CompletedTab(ttk.Frame):
+class CompletedPage(ctk.CTkFrame):
     def __init__(self, master, app: App):
-        super().__init__(master, padding=10)
+        super().__init__(master, fg_color=theme.BG)
         self.app = app
-        ttk.Label(self, text="完了済みタスク（完了した日ごと）", style="Heading.TLabel").pack(anchor="w")
-        self.list = ScrollableFrame(self)
-        self.list.pack(fill="both", expand=True, pady=(10, 0))
+        self.fonts = app.fonts
+
+        box = card(self)
+        box.pack(fill="both", expand=True, pady=(4, 4))
+        ctk.CTkLabel(box, text="✅ 完了済みタスク（完了した日ごと）", font=self.fonts.heading, text_color=theme.TEXT).pack(
+            anchor="w", padx=20, pady=(14, 4)
+        )
+        self.list = scroll_frame(box)
+        self.list.pack(fill="both", expand=True, padx=8, pady=(0, 10))
+        self.list.grid_columnconfigure(0, weight=1)
 
     def refresh(self):
-        self.list.clear()
+        f = self.fonts
+        for child in self.list.winfo_children():
+            child.destroy()
         groups = self.app.store.completed_by_date()
         if not groups:
-            ttk.Label(self.list.inner, text="完了したタスクはまだありません。", foreground=SUB_COLOR).pack(anchor="w")
+            ctk.CTkLabel(self.list, text="完了したタスクはまだありません。", font=f.body, text_color=theme.SUB).grid(
+                row=0, column=0, pady=30
+            )
             return
+        row = 0
         for day, items in groups:
-            header = ttk.Frame(self.list.inner)
-            header.pack(fill="x", pady=(12, 4))
-            ttk.Label(header, text=f"{format_date_jp(day)}　{len(items)}件", style="SubHeading.TLabel").pack(
-                side="left"
-            )
-            ttk.Button(header, text="この日のホームを開く", command=lambda d=day: self.app.show_home(d)).pack(
-                side="right"
-            )
-            ttk.Separator(self.list.inner).pack(fill="x")
+            header = ctk.CTkFrame(self.list, fg_color="transparent")
+            header.grid(row=row, column=0, sticky="ew", padx=8, pady=(14, 4))
+            ctk.CTkLabel(header, text=format_date_jp(day), font=f.subheading, text_color=theme.TEXT).pack(side="left")
+            badge(header, f"{len(items)}件", theme.BADGE_DONE, f).pack(side="left", padx=(8, 0))
+            ghost_button(header, "この日のホームを開く", lambda d=day: self.app.show_home(d), f, width=160).pack(side="right")
+            row += 1
 
             for task, done_at in items:
-                row = ttk.Frame(self.list.inner, padding=(16, 3))
-                row.pack(fill="x")
-                ttk.Label(row, text="✓ " + task.title).pack(side="left")
-                ttk.Label(row, text=f"{_time_of(done_at)} 完了", foreground=SUB_COLOR).pack(side="left", padx=(10, 0))
+                item = card(self.list)
+                item.grid(row=row, column=0, sticky="ew", padx=8, pady=3)
+                ctk.CTkLabel(item, text="✔", font=f.subheading, text_color=theme.SUCCESS).pack(side="left", padx=(14, 6), pady=8)
+                ctk.CTkLabel(item, text=task.title, font=f.body, text_color=theme.TEXT).pack(side="left")
+                ctk.CTkLabel(item, text=f"{_time_of(done_at)} 完了", font=f.small, text_color=theme.SUB).pack(
+                    side="left", padx=(12, 0)
+                )
                 if task.keep_after_done:
-                    ttk.Label(row, text="毎日表示", style="Badge.TLabel").pack(side="left", padx=(10, 0))
-                ttk.Button(
-                    row, text="未完了に戻す", command=lambda t=task, d=day: self._undo(t.id, d)
-                ).pack(side="right")
+                    badge(item, "🔁 毎日表示", theme.BADGE_DAILY, f).pack(side="left", padx=(10, 0))
+                ghost_button(item, "未完了に戻す", lambda t=task, d=day: self._undo(t.id, d), f, width=110).pack(
+                    side="right", padx=10
+                )
+                row += 1
 
-    def _undo(self, task_id, day):
+    def _undo(self, task_id: str, day: date):
         self.app.store.set_task_done(task_id, day, False)
         self.refresh()
 
