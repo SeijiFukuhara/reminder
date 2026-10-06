@@ -22,7 +22,48 @@ exe を置き換えて（更新して）もデータは消えません。
 
 ## 自分で exe を作る
 
-Python 3.10 以上が入った Windows PC で、次を実行します。
+### ZIP ファイルから作る（git がなくてもできます）
+
+#### 1. Python をインストールする（初回のみ）
+
+1. [python.org](https://www.python.org/downloads/) から Windows 用の Python（3.10 以上）をダウンロードする
+2. インストーラーの最初の画面で **「Add python.exe to PATH」にチェックを入れて**から「Install Now」を押す
+
+インストールできたかは、コマンドプロンプトで `python --version` と入力して、バージョンが表示されれば OK です。
+
+#### 2. コードを ZIP でダウンロードして展開する
+
+1. [リポジトリのページ](https://github.com/SeijiFukuhara/reminder) を開く
+2. 緑色の「**Code**」ボタン →「**Download ZIP**」を押す
+3. ダウンロードした `reminder-main.zip` を右クリック →「**すべて展開**」を押す
+   - 展開先は `C:\Users\<ユーザー名>\reminder-main` などの分かりやすい場所にする
+   - ZIP を開いただけ（展開せずに中を見ている状態）では実行できないので、必ず展開してください
+
+#### 3. exe を作る
+
+1. 展開したフォルダ（`main.py` や `build.bat` が入っているフォルダ）を開く
+2. `build.bat` をダブルクリックする
+   - 「Windows によって PC が保護されました」と表示されたら、「詳細情報」→「実行」を押す
+3. 黒い画面で処理が進むので、1〜3分ほど待つ
+4. `Done: ...\dist\Reminder.exe` と表示されたら完成。何かキーを押して画面を閉じる
+
+#### 4. exe を実行する
+
+1. フォルダ内にできた `dist` フォルダを開く
+2. `Reminder.exe` をダブルクリックして起動する
+
+`Reminder.exe` はこれ1つで動くので、デスクトップなど好きな場所にコピーして使えます
+（コピーした後は、展開したフォルダを消してもかまいません）。
+
+#### うまくいかないとき
+
+| 表示 | 対処 |
+|------|------|
+| `Python was not found.` | Python が入っていないか、「Add python.exe to PATH」にチェックせずにインストールしています。手順 1 をやり直してください |
+| `Build failed.` | インターネットに接続されているか確認してから、もう一度 `build.bat` を実行してください |
+| `build.bat` がすぐ閉じる | ZIP を展開せずに開いている可能性があります。手順 2 の「すべて展開」を行ってください |
+
+### git を使って作る
 
 ```
 git clone https://github.com/SeijiFukuhara/reminder.git
@@ -30,7 +71,7 @@ cd reminder
 build.bat
 ```
 
-`build.bat` は次のことを自動で行います。
+### build.bat がしていること
 
 1. 仮想環境 `.venv` がなければ作成する
 2. `.venv` に customtkinter と PyInstaller（`requirements-dev.txt`）をインストールする
