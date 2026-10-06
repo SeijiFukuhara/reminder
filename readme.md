@@ -125,6 +125,7 @@ reminder_app/
     theme.py            色・フォント
     home.py             ホーム（タスク一覧・今日のメモ）
     task_form.py        タスク登録・編集
+    memo_form.py        今日のメモの登録
     completed.py        完了済みタスク（日ごと）
     registered.py       登録済みタスク・メモ一覧
     widgets.py          共通部品（カレンダー、削除ボタンなど）

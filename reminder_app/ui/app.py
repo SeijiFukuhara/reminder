@@ -10,6 +10,7 @@ from ..storage import Store
 from . import theme
 from .completed import CompletedPage
 from .home import HomePage
+from .memo_form import MemoFormPage
 from .registered import RegisteredPage
 from .task_form import TaskFormPage
 from .theme import Fonts
@@ -19,6 +20,7 @@ STATUS_CLEAR_MS = 5000
 
 TAB_HOME = "🏠 ホーム"
 TAB_FORM = "➕ タスク登録"
+TAB_MEMO = "📝 メモ登録"
 TAB_COMPLETED = "✅ 完了済み"
 TAB_REGISTERED = "📋 登録済み一覧"
 
@@ -41,7 +43,7 @@ class App(ctk.CTk):
         ctk.CTkLabel(header, text="🗓 リマインダー", font=self.fonts.app_title, text_color=theme.TEXT).pack(side="left")
         self.tab_bar = ctk.CTkSegmentedButton(
             header,
-            values=[TAB_HOME, TAB_FORM, TAB_COMPLETED, TAB_REGISTERED],
+            values=[TAB_HOME, TAB_FORM, TAB_MEMO, TAB_COMPLETED, TAB_REGISTERED],
             command=self.show_page,
             font=self.fonts.body_bold,
             height=36,
@@ -62,11 +64,13 @@ class App(ctk.CTk):
         content.grid_columnconfigure(0, weight=1)
         self.home = HomePage(content, self)
         self.form = TaskFormPage(content, self)
+        self.memo_form = MemoFormPage(content, self)
         self.completed = CompletedPage(content, self)
         self.registered = RegisteredPage(content, self)
         self.pages = {
             TAB_HOME: self.home,
             TAB_FORM: self.form,
+            TAB_MEMO: self.memo_form,
             TAB_COMPLETED: self.completed,
             TAB_REGISTERED: self.registered,
         }
@@ -105,6 +109,13 @@ class App(ctk.CTk):
         self.form.load_new(start_date)
         self.show_page(TAB_FORM)
         self.form.focus_title()
+
+    def open_memo(self, d: date | None = None):
+        """メモ登録画面を開く。日付を指定すると、その日のメモを表示する。"""
+        self.show_page(TAB_MEMO)
+        if d is not None:
+            self.memo_form.set_date(d)
+        self.memo_form.focus_text()
 
     def open_edit_task(self, task_id: str):
         task = self.store.get_task(task_id)

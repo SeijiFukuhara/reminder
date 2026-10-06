@@ -169,7 +169,7 @@ class RegisteredPage(ctk.CTkFrame):
         if d is None:
             self.app.set_status("日付は 2026-10-05 のように入力するか、📅 から選んでください。", error=True)
             return
-        self.app.show_home(d, focus_memo=True)
+        self.app.open_memo(d)
 
     def _delete_memo(self, d: date):
         self.app.store.delete_memo(d)
